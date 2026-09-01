@@ -1,44 +1,73 @@
 package com.Vijay.TalentIq.service;
 
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class EmailService {
 
-    private final JavaMailSender mailSender;
+    @Value("${brevo.api.key}")
+    private String brevoApiKey;
 
-    public EmailService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
-    }
+    @Value("${brevo.sender.email}")
+    private String senderEmail;
+
+    @Value("${brevo.sender.name}")
+    private String senderName;
+
+    private static final String BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+
+    private final RestTemplate restTemplate = new RestTemplate();
 
     public void sendOtpEmail(String toEmail, String otp, int expiryMinutes) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
-            helper.setTo(toEmail);
-            helper.setSubject("TalentIQ - Your Password Reset OTP");
-            helper.setText(buildOtpEmailHtml(otp, expiryMinutes, "reset your TalentIQ account password"), true);
-            mailSender.send(message);
-        } catch (MessagingException e) {
-            throw new RuntimeException("Failed to send OTP email. Please try again later.");
-        }
+        sendEmail(
+            toEmail,
+            "TalentIQ - Your Password Reset OTP",
+            buildOtpEmailHtml(otp, expiryMinutes, "reset your TalentIQ account password")
+        );
     }
 
     public void sendSignupOtpEmail(String toEmail, String otp, int expiryMinutes) {
+        sendEmail(
+            toEmail,
+            "TalentIQ - Verify Your Email",
+            buildOtpEmailHtml(otp, expiryMinutes, "verify your TalentIQ account email")
+        );
+    }
+
+    private void sendEmail(String toEmail, String subject, String htmlContent) {
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
-            helper.setTo(toEmail);
-            helper.setSubject("TalentIQ - Verify Your Email");
-            helper.setText(buildOtpEmailHtml(otp, expiryMinutes, "verify your TalentIQ account email"), true);
-            mailSender.send(message);
-        } catch (MessagingException e) {
-            throw new RuntimeException("Failed to send verification email. Please try again later.");
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("api-key", brevoApiKey);
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("accept", "application/json");
+
+            Map<String, Object> sender = new HashMap<>();
+            sender.put("name", senderName);
+            sender.put("email", senderEmail);
+
+            Map<String, Object> recipient = new HashMap<>();
+            recipient.put("email", toEmail);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("sender", sender);
+            body.put("to", new Object[] { recipient });
+            body.put("subject", subject);
+            body.put("htmlContent", htmlContent);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+
+            restTemplate.postForEntity(BREVO_API_URL, request, String.class);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send email via Brevo. Please try again later.", e);
         }
     }
 

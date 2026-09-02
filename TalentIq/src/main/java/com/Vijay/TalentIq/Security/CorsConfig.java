@@ -20,6 +20,7 @@ public class CorsConfig {
             List.of(
                 "http://localhost:5173",
                 "http://localhost:5174",
+                "https://spring-ai-ten.vercel.app",
                 "https://spring-ai-4dh4.vercel.app"
             )
         );

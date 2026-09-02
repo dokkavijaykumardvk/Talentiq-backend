@@ -1,5 +1,7 @@
 package com.Vijay.TalentIq.Controller;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -28,6 +30,8 @@ import jakarta.validation.Valid;
 @RestController
 public class AuthController {
 
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+
     @Autowired
     private AuthenticationManager authenticationManager;
     @Autowired
@@ -54,10 +58,12 @@ public class AuthController {
                     user.getEmail()
             ));
         } catch (org.springframework.security.authentication.DisabledException e) {
+            logger.warn("Login blocked - email not verified: {}", request.email());
             return ResponseEntity.status(403).body(
                 new MessageResponse("Please verify your email before logging in.")
             );
         } catch (Exception e) {
+            logger.error("Login failed for email {}: {}", request.email(), e.getMessage(), e);
             return ResponseEntity.status(401).body(new MessageResponse("Invalid email or password"));
         }
     }
@@ -76,6 +82,7 @@ public class AuthController {
             registeredUser.setPassword(null);
             return ResponseEntity.ok(registeredUser);
         } catch (Exception e) {
+            logger.error("Signup failed for email {}: {}", request.email(), e.getMessage(), e);
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         }
     }
@@ -87,6 +94,7 @@ public class AuthController {
             userService.verifySignupOtp(request.email(), request.otp());
             return ResponseEntity.ok(new MessageResponse("Email verified successfully."));
         } catch (Exception e) {
+            logger.error("OTP verification failed for email {}: {}", request.email(), e.getMessage(), e);
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         }
     }
@@ -97,7 +105,9 @@ public class AuthController {
         try {
             userService.resendSignupOtp(request.email());
         } catch (Exception e) {
-            // Never reveal whether the account exists
+            // Never reveal whether the account exists to the client,
+            // but still log internally so failures are visible.
+            logger.error("Resend signup OTP failed for email {}: {}", request.email(), e.getMessage(), e);
         }
         return ResponseEntity.ok(
             new MessageResponse("If an account exists for this email, a new OTP has been sent.")
@@ -110,7 +120,9 @@ public class AuthController {
         try {
             userService.initiatePasswordReset(request.email());
         } catch (Exception e) {
-            // Never reveal whether the email exists or leak internal errors
+            // Never reveal whether the email exists to the client,
+            // but still log internally so failures are visible.
+            logger.error("Forgot password failed for email {}: {}", request.email(), e.getMessage(), e);
         }
         return ResponseEntity.ok(
             new MessageResponse("If an account exists for this email, an OTP has been sent.")
@@ -124,6 +136,7 @@ public class AuthController {
             String resetToken = userService.verifyOtp(request.email(), request.otp());
             return ResponseEntity.ok(new VerifyOtpResponse("OTP verified successfully.", resetToken));
         } catch (Exception e) {
+            logger.error("OTP verification (reset) failed for email {}: {}", request.email(), e.getMessage(), e);
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         }
     }
@@ -139,6 +152,7 @@ public class AuthController {
             userService.resetPassword(request.email(), request.resetToken(), request.newPassword());
             return ResponseEntity.ok(new MessageResponse("Password reset successfully."));
         } catch (Exception e) {
+            logger.error("Password reset failed for email {}: {}", request.email(), e.getMessage(), e);
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         }
     }
